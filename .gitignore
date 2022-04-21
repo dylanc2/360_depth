@@ -1,1 +1,4 @@
 demo.mp4
+data.npy
+predicted_points.npy
+depths.npy
