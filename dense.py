@@ -5,6 +5,8 @@ import glob
 import matplotlib.pyplot as plt
 import kornia
 import torch
+from sklearn.linear_model import RANSACRegressor
+from sklearn.linear_model import LinearRegression
 
 def run_frames(folder):
     # params for corner detection
@@ -240,33 +242,91 @@ def plot_kornia():
     depths = torch.tensor(np.load('depths.npy'))[:, None, :, :]
     print(depths.shape)
     B = depths.shape[0]
-
+    
     n = []
     for i in range(B):
         n.append(torch.tensor([[2304, 0, 960], [0, 2304, 544], [0, 0, 1]]))
     K = torch.stack(n,dim=0)
     print(K.shape)
 
-    points_batch = kornia.geometry.depth.depth_to_3d(depths, K).numpy()
+    points_batch = kornia.geometry.depth.depth_to_3d(depths[100:102], K[100:102]).numpy()
     points = points_batch[0]
+    points2 = points_batch[1]
     print("Points shape: ", points.shape)
 
-    num_pixels = depths.shape[2] * depths.shape[3]
-    sample_size = 1000
-    idx = np.random.choice(np.arange(num_pixels), sample_size, replace=False)
-    xs = points[0].reshape(num_pixels)[idx]
-    ys = points[1].reshape(num_pixels)[idx]
-    zs = points[2].reshape(num_pixels)[idx]
+    b100 = np.array([801.7296,  617.7409, 1142.4205,  782.8949]).astype(int)
+    b101 = [784.78357,  616.9811,  1130.3014,   783.1737]
 
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
-    ax.scatter(xs, ys, zs)
-    plt.show()
+
+    ##select depth out for b100
+    set1 = points[:,b100[1]:b100[3],b100[0]:b100[2]]
+
+
+    ##and for optical flow ahead points
+    old_gray = cv2.cvtColor(cv2.imread("f100.jpg"), cv2.COLOR_BGR2GRAY)
+    frame_gray = cv2.cvtColor(cv2.imread("f101.jpg"), cv2.COLOR_BGR2GRAY)
+    
+    # calculate optical flow
+    flow = cv2.calcOpticalFlowFarneback(old_gray, frame_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    print(flow.shape)
+
+    # prev(y,x)∼next(y+flow(y,x)[1],x+flow(y,x)[0])
+    #points2[:,b100[]]
+    y = b100[1]
+    x = b100[0]
+    y_new = int(y+flow[y][x][1])
+    x_new = int(x+flow[y][x][0])
+
+    y = b100[3]
+    x = b100[2]
+    y_new2 = int(y+flow[y][x][1])
+    x_new2 = int(x+flow[y][x][0])
+
+    set2 = points2[:,y_new:y_new2,x_new:x_new2+1]
+    set1 = np.moveaxis(set1, 0, -1)
+    set2 = np.moveaxis(set2, 0, -1)
+
+    r = RANSACRegressor(min_samples=10)
+    res1 = set1.reshape(set1.shape[0],set1.shape[1]*set1.shape[2])
+    res2 = set2.reshape(set2.shape[0],set2.shape[1]*set2.shape[2])
+    res1, t1 = res1[:120], res1[120:]
+    res2, t2 = res2[:120], res2[120:]
+    r.fit(res1,res2)
+    print(r.score(t1,t2))
+    r2 = LinearRegression()
+    r2.fit(res1, res2)
+    print(r2.score(t1,t2))
+
+
+
+
+
+
+    # num_pixels = depths.shape[2] * depths.shape[3]
+    # sample_size = 1000
+    # idx = np.random.choice(np.arange(num_pixels), sample_size, replace=False)
+    # xs = points[0].reshape(num_pixels)[idx]
+    # ys = points[1].reshape(num_pixels)[idx]
+    # zs = points[2].reshape(num_pixels)[idx]
+
+    # fig = plt.figure()
+    # ax = fig.add_subplot(projection='3d')
+    # ax.scatter(xs, ys, zs)
+    # plt.show()
 
 if __name__ == "__main__":
-    run_mp4("demo.mp4")
+    cc = cv2.VideoCapture("demo.mp4")
+    ii = 0
+    while ii<100:
+        cc.read()
+        ii+=1
+    _, f100 = cc.read()
+    _, f101 = cc.read()
+    cv2.imwrite("f100.jpg",f100)
+    cv2.imwrite("f101.jpg",f101)
+    #run_mp4("demo.mp4")
     # run_frames("frames")
     import os
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     # plot_3d()
-    # plot_kornia()
+    plot_kornia()
