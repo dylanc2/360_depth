@@ -287,15 +287,14 @@ def plot_kornia():
     set2 = np.moveaxis(set2, 0, -1)
 
     r = RANSACRegressor(min_samples=10)
-    res1 = set1.reshape(set1.shape[0],set1.shape[1]*set1.shape[2])
-    res2 = set2.reshape(set2.shape[0],set2.shape[1]*set2.shape[2])
-    res1, t1 = res1[:120], res1[120:]
-    res2, t2 = res2[:120], res2[120:]
+    res1 = set1.reshape(set1.shape[0]*set1.shape[1],set1.shape[2])
+    print(res1.shape)
+    res2 = set2.reshape(set2.shape[0]*set2.shape[1],set2.shape[2])
+    #res1, t1 = res1[:-10000], res1[-10000:]
+    #res2, t2 = res2[:-10000], res2[-10000:]
     r.fit(res1,res2)
-    print(r.score(t1,t2))
-    r2 = LinearRegression()
-    r2.fit(res1, res2)
-    print(r2.score(t1,t2))
+    print(r.score(res1,res2))
+    
 
 
 
